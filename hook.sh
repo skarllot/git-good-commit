@@ -22,50 +22,6 @@ WHITE=
 NC=
 
 #
-# Set colour variables if the output should be coloured.
-#
-
-set_colors() {
-  local default_color=$(git config --get hooks.goodcommit.color || git config --get color.ui || echo 'auto')
-  if [[ $default_color == 'always' ]] || [[ $default_color == 'auto' && -t 1 ]]; then
-    RED='\033[1;31m'
-    YELLOW='\033[1;33m'
-    BLUE='\033[1;34m'
-    WHITE='\033[1;37m'
-    NC='\033[0m' # No Color
-  fi
-}
-
-#
-# Set the hook editor, using the same approach as git.
-#
-
-set_editor() {
-  # $GIT_EDITOR appears to always be set to `:` when the hook is executed by Git?
-  # ref: http://stackoverflow.com/q/41468839/885540
-  # ref: https://github.com/tommarshall/git-good-commit/issues/11
-  # HOOK_EDITOR=$GIT_EDITOR
-  test -z "${HOOK_EDITOR}" && HOOK_EDITOR=$(git config --get core.editor)
-  test -z "${HOOK_EDITOR}" && HOOK_EDITOR=$VISUAL
-  test -z "${HOOK_EDITOR}" && HOOK_EDITOR=$EDITOR
-  test -z "${HOOK_EDITOR}" && HOOK_EDITOR='vi'
-}
-
-#
-# Output prompt help information.
-#
-
-prompt_help() {
-  echo -e "${RED}$(cat <<-EOF
-e - edit commit message
-y - proceed with commit
-n - abort commit
-? - print help
-EOF
-)${NC}"
-}
-
-#
 # Add a warning with <line_number> and <msg>.
 #
 
@@ -205,12 +161,81 @@ validate_commit_message() {
     used           uses          using
   )
 
+    IMPERATIVE_MOOD_BLACKLIST_PTBR=(
+    acrescentado    acrescentas     acrescentando   acrescentei
+    adicionado      adicionas       adicionando     adicionei       adição          adições
+    ajustado        ajustas         ajustando       ajustei
+    alterado        alteras         alterando       alterei         alteração       alterações
+    ampliado        amplias         ampliando       ampliei
+    apagado         apagas          apagando        apaguei
+    aprimorado      aprimoradas     aprimorando     aprimorei
+    arrumado        arrumas         arrumando       arrumei
+    atualizado      atualizas       atualizando     atualizei
+    aumentado       aumentas        aumentando      aumentei
+    baixado         baixas          baixando        baixei
+    cancelado       cancelas        cancelando      cancelei
+    conferido       conferes        conferindo      conferi
+    consertado      consertas       consertando     consertei
+    controlado      controlas       controlando     controlei
+    completado      completas       completando     completei
+    copiado         copias          copiando        copiei
+    corrigido       corriges        corrigindo      corrigi         correção        correções
+    criado          crias           criando         criei
+    deletado        deletas         deletando       deletei
+    desabilitado    desabilitas     desabilitando   desabilitei
+    deslocado       deslocas        desalocando     desaloquei
+    determinado     determinas      determinando    determinei
+    efetuado        efetuas         efetuando       efetuei
+    enviado         envias          enviando        enviei
+    evitado         evitas          evitando        evitei
+    excluido        exclues         excluindo       excluí
+    executado       executas        executando      executei
+    explicado       explicas        explicando      expliquei
+    finalizado      finalizas       finalizando     finalizei       finalização
+    habilitado      habilitas       habilitando     habilitei
+    implantado      implantas       implantando     implantei
+    implementado    implementas     implementando   implementei     implementação   implementações
+    importado       importas        importando      importei
+    incluido        incluis         incluindo       incluí
+    incrementado    incrementas     incrementando   incrementei
+    iniciado        inicias         iniciando       iniciei
+    inserido        inseres         inserindo       inseri
+    instalado       instalas        instalando      instalei
+    limpado         limpas          limpando        limpei
+    melhorado       melhoras        melhorando      melhorei
+    mostrado        mostras         mostrando       mostrei
+    movido          moves           movendo         movi
+    mudado          mudas           mudando         mudei
+    ordenado        ordenas         ordenando       ordenei
+    reduzido        reduzes         reduzindo       reduzi
+    refatorado      refatoras       refatorando     refatorei
+    remodelado      remodelas       remodelando     remodelei
+    removido        removes         removendo       removi
+    renomeado       renomeias       renomeando      renomeei
+    reposto         repões          repondo         repus
+    resolvido       resolves        resolvendo      resolvi
+    retirado        retiras         retirando       retirei
+    revertido       revertes        revertendo      reverti
+    substituido     substituis      substituindo    substituí
+    testado         testas          testando        testei
+    tirado          tiras           tirando         tirei
+    transferido     transferes      transferindo    transferi
+    usado           usas            usando          usei
+    utilizado       utilizas        utilizando      utilizei
+    verificado      verificas       verificando     verifiquei
+  )
+
   # enable case insensitive match
   shopt -s nocasematch
 
   for BLACKLISTED_WORD in "${IMPERATIVE_MOOD_BLACKLIST[@]}"; do
     [[ ${COMMIT_SUBJECT} =~ ^[[:blank:]]*$BLACKLISTED_WORD ]]
     test $? -eq 0 && add_warning 1 "Use the imperative mood in the subject line, e.g 'fix' not 'fixes'" && break
+  done
+
+  for BLACKLISTED_WORD in "${IMPERATIVE_MOOD_BLACKLIST_PTBR[@]}"; do
+    [[ ${COMMIT_SUBJECT} =~ ^[[:blank:]]*$BLACKLISTED_WORD ]]
+    test $? -eq 0 && add_warning 1 "Utilize o modo imperativo no tópico. Ex: 'Corrige' em vez de 'Corrigido'" && break
   done
 
   # disable case insensitive match
@@ -250,10 +275,6 @@ validate_commit_message() {
 # It's showtime.
 #
 
-set_colors
-
-set_editor
-
 if tty >/dev/null 2>&1; then
   TTY=$(tty)
 else
@@ -271,18 +292,6 @@ while true; do
 
   display_warnings
 
-  # Ask the question (not using "read -p" as it uses stderr not stdout)
-  echo -en "${BLUE}Proceed with commit? [e/y/n/?] ${NC}"
-
-  # Read the answer
-  read REPLY < "$TTY"
-
-  # Check if the reply is valid
-  case "$REPLY" in
-    E*|e*) $HOOK_EDITOR "$COMMIT_MSG_FILE" < $TTY; continue ;;
-    Y*|y*) exit 0 ;;
-    N*|n*) exit 1 ;;
-    *)     SKIP_DISPLAY_WARNINGS=1; prompt_help; continue ;;
-  esac
+  exit 1
 
 done
